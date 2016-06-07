@@ -2,7 +2,7 @@
 Release Git Version
 ===================
 
-Ferramenta para automatizar a liberação de versões com Git.
+Tool to automate the release versions with Git
 
 GERAR VERSÃO NO GIT DE FORMA AUTOMATIZADA
 -----------------------------------------
