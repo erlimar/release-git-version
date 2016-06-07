@@ -1,0 +1,1 @@
+:: powershell -c "if($psversiontable.psversion.major -ge 2){exit(0)}else{exit(1)}"
