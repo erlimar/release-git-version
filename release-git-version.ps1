@@ -129,10 +129,15 @@ Function Test-Command([string]$Cmd) {
 <#
 .SYNOPSIS
     Clear temporary data
+.PARAMETER FullClear
+    Clear all files and directorys
 #>
-Function Clear-TempData() {
-    # TODO: Implements
+Function Clear-TempData($FullClear) {
+    "# TODO: Implements Clear-TempData - FullClear ${FullClear}" | Write-Host
 }
+
+# Only TRUE if finish without errors
+$_success = $false
 
 try {
     # Git is requires
@@ -155,7 +160,7 @@ try {
     $_tempFolder = Get-TemporaryFolderName
     $_changelogMerge = Get-TemporaryFileName -Sufix $FileChangelog
     $_changelogStage = Get-TemporaryFileName -Sufix $FileChangelog
-
+    
     "RepositoryURL: ${RepositoryURL}" | Write-Host
     "Version: ${Version}" | Write-Host
     "BranchVersion: ${BranchVersion}" | Write-Host
@@ -178,7 +183,7 @@ catch {
     $LastExitCode = 1
 }
 finally {
-    Clear-TempData    
+    Clear-TempData -FullClear (!$_success)
 }
 
 exit($LastExitCode)
