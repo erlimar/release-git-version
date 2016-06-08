@@ -13,8 +13,14 @@
     Default: $null
     Number of version to generate
 .PARAMETER BranchVersion
-    Default: <Version>rc
+    Default: release/<Version>rc
     Name of temporary branch to prepare version
+.PARAMETER CommitterName
+    Default: $null
+    Name of the Git user committer 
+.PARAMETER CommitterEmail
+    Default: $null
+    E-mail of the Git user commiter
 .PARAMETER BranchProduction
     Default: master
     Name of production branch
@@ -25,7 +31,7 @@
     Default: CHANGELOG.txt
     Name of changelog file on repository root
 .PARAMETER FileVersion
-    Default: version.txt
+    Default: $null
     Name of file version on repository root
 .PARAMETER RemoteName
     Default: origin
@@ -33,12 +39,9 @@
 .PARAMETER PrefixTag
     Default: v
     Prefix of the version tag to generate
-.PARAMETER CommitterName
-    Default: $null
-    Name of the Git user committer 
-.PARAMETER CommitterEmail
-    Default: $null
-    E-mail of the Git user commiter
+.PARAMETER Locale
+    Default: en-US
+    Locale name (en-US, pt-BR)
 #>
 
 param (
@@ -50,10 +53,22 @@ param (
     [string] $BranchProduction = "master",
     [string] $BranchDevelopment = "develop",
     [string] $FileChangelog = "CHANGELOG.txt",
-    [string] $FileVersion = "version.txt",
+    [string] $FileVersion = $null,
     [string] $RemoteName = "origin",
-    [string] $PrefixTag = "v"
+    [string] $PrefixTag = "v",
+    [string] $Locale = "en-US"
 )
+
+$_localeDefault = "en-US"
+$_localeFilePath=[io.path]::Combine($PSScriptRoot, "locale.${Locale}.ps1")
+
+if(!(Test-Path $_localeFilePath)) {
+    $_localeFilePath=[io.path]::Combine($PSScriptRoot, "locale.${_localeDefault}.ps1")
+}
+
+$_localeFilePath | Write-Host
+
+iex "& $_localeFilePath"
 
 <#
 .SYNOPSIS
@@ -66,11 +81,39 @@ param (
 Function Get-EnsureString([string]$Value, [string]$Prompt) {
     $output = $Value
 
-    While([String]::IsNullOrWhiteSpace($output)) {
+    while([string]::IsNullOrWhiteSpace($output)) {
         $output = Read-Host -Prompt $Prompt
     }
 
     return $output
+}
+
+<#
+.SYNOPSIS
+    Show user prompot to insert a object pair to merge on the version
+#>
+Function Get-ObjectToMerge() {
+    $pair = @()
+    $object = ""
+    $log = ""
+
+    $output = Read-Host -Prompt $env:MSG_PROMPT_ADD_WORK
+    if(![string]::IsNullOrWhiteSpace($output)) {
+        $object = $output
+        $output = Read-Host -Prompt $env:MSG_PROMPT_ADD_LOG
+        
+        if(![string]::IsNullOrWhiteSpace($output)) {
+            $log = $output
+        }
+    }
+
+    if([string]::IsNullOrWhiteSpace($object)) {
+        return $null
+    } else {
+        $pair += @($object, $log)
+    }
+
+    return $pair
 }
 
 <#
@@ -94,7 +137,7 @@ Function Get-TemporaryFileName([string]$Sufix=$null) {
     $fileName = [System.IO.Path]::GetRandomFileName()
     $fileName = "${fileName}".Replace(".",$null)
 
-    if(! [String]::IsNullOrWhiteSpace($Sufix)) {
+    if(! [string]::IsNullOrWhiteSpace($Sufix)) {
         $fileName = "${fileName}_${Sufix}"
     }
 
@@ -142,24 +185,25 @@ $_success = $false
 try {
     # Git is requires
     if(! (Test-Command -Cmd "git")) {
-        throw "Git is required. Install Git tool from https://git-scm.com"
+        throw $env:MSG_ERROR_INSTALL_GIT
     }
 
-    $RepositoryURL = Get-EnsureString -Value $RepositoryURL -Prompt "Enter a repository URL"
-    $Version = Get-EnsureString -Value $Version -Prompt "Enter a version number"
+    $RepositoryURL = Get-EnsureString -Value $RepositoryURL -Prompt $env:MSG_ENTER_REPOSITORY_URL
+    $Version = Get-EnsureString -Value $Version -Prompt $env:MSG_ENTER_VERSION_NUMBER
 
-    if([String]::IsNullOrWhiteSpace($BranchVersion)) {
+    if([string]::IsNullOrWhiteSpace($BranchVersion)) {
         $BranchVersion = "release/${Version}rc"
     }
 
-    $BranchVersion = Get-EnsureString -Value $BranchVersion -Prompt "Enter a version branch name"
-    $CommitterName = Get-EnsureString -Value $CommitterName -Prompt "Enter a Git commiter name"
-    $CommitterEmail = Get-EnsureString -Value $CommitterEmail -Prompt "Enter a Git commiter e-mail"
+    $BranchVersion = Get-EnsureString -Value $BranchVersion -Prompt $env:MSG_ENTER_VERSION_BRANCH
+    $CommitterName = Get-EnsureString -Value $CommitterName -Prompt $env:MSG_ENTER_COMMITTER_NAME
+    $CommitterEmail = Get-EnsureString -Value $CommitterEmail -Prompt $env:MSG_ENTER_COMMITTER_EMAIL
 
     $_tagName = "${PrefixTag}${Version}"
     $_tempFolder = Get-TemporaryFolderName
     $_changelogMerge = Get-TemporaryFileName -Sufix $FileChangelog
     $_changelogStage = Get-TemporaryFileName -Sufix $FileChangelog
+    $_mergeList = new-object "System.Collections.ArrayList"
     
     "RepositoryURL: ${RepositoryURL}" | Write-Host
     "Version: ${Version}" | Write-Host
@@ -178,8 +222,20 @@ try {
     "_tempFolder: ${_tempFolder}" | Write-Host
     "_changelogMerge: ${_changelogMerge}" | Write-Host
     "_changelogStage: ${_changelogStage}" | Write-Host
+    
+    $env:MSG_PROMPT_ADD_WORK_TITLE | Write-Host
+    $env:MSG_PROMPT_ADD_WORK_LINE | Write-Host
+    # TODO: Or use file to enter the work (branch/commit)
+    $objectMerge = Get-ObjectToMerge
+    while($objectMerge -ne $null) {
+        $_mergeList.add($objectMerge) > $null
+        $objectMerge = Get-ObjectToMerge
+    }
+
+
 }
 catch {
+    ($env:MSG_ERROR_TEMPLATE.Replace("{0}", $_)) | Write-Host -BackgroundColor Red -ForegroundColor Yellow
     $LastExitCode = 1
 }
 finally {

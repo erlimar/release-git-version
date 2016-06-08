@@ -45,42 +45,48 @@ Commit com mensagem de log [ultimo]: sd45f4d4d54fs46df456d45df654fd465
      {"sd56f4ds456e465ds",""},
      {"bug-1234","sd45f4d4d54fs46df456d45df654fd465"}
    ]
+   
+1. Se algum branch para merge se repete ou é igual a branch de produção, desenvolvimento ou de versão, ERRO;
+   Grava "Erro: Branch de trabalho[X] não deve ser igual branch de [produção???]" >> "tmpname_v2.0.0.log"
+   
+1. Se nenhum branch para merge foi informado, ERRO;
+   Grava "Erro: Pelo menos um branch para merge deve ser informado" >> "tmpname_v2.0.0.log"
  
-1. Clona o repositorio em "diretorio_temporario/repository"
+3. Clona o repositorio em "diretorio_temporario/repository"
  
-2. Se branch de versão já existe, ERRO;
+4. Se branch de versão já existe, ERRO;
    Grava "Erro: Branch de versão [2.0.0rc] já existe" >> "tmpname_v2.0.0.log"
-3. Se branch de produção NÃO existe, ERRO;
+5. Se branch de produção NÃO existe, ERRO;
    Grava "Erro: Branch de produção [master] não existe" >> "tmpname_v2.0.0.log"
-4. Se tag a gerar já existe, ERRO;
+6. Se tag a gerar já existe, ERRO;
    Grava "Erro: Tag [v2.0.0] já existe" >> "tmpname_v2.0.0.log"
-5. Se algum branch para merge não existe, ERRO;
+7. Se algum branch para merge não existe, ERRO;
    Grava "Erro: Branch de trabalho[X] não existe" >> "tmpname_v2.0.0.log"
 
-6. Configura dados de usuário
+8. Configura dados de usuário
    $ git config user.name {nome_usuario}
    $ git config user.email {email_usuario}
    
-7. Muda para "branch de produção"
+9. Muda para "branch de produção"
    $ git checkout master
 
-8. Gerar branch de versão
+10. Gerar branch de versão
    $ git checkout -b 2.0.0rc
 
-9. Para cada branch de merge:
-9.1. Grava "Merge de {remoto}/{branch de merge}\n--------" >> "tmpname_v2.0.0.log"
-9.2. Faz merge no branch de versão:
+11. Para cada branch de merge:
+11.1. Grava "Merge de {remoto}/{branch de merge}\n--------" >> "tmpname_v2.0.0.log"
+11.2. Faz merge no branch de versão:
      $ git merge "{remoto}/{branch de merge}" >> "tmpname_v2.0.0.log"
-9.3. Grava LOG de "$git log -1 --no-merges --pretty=oneline|foreach($git log -10 --no-merges --pretty=oneline)" >> "tmpname_{CHANGELOG}"
+11.3. Grava LOG de "$git log -1 --no-merges --pretty=oneline|foreach($git log -10 --no-merges --pretty=oneline)" >> "tmpname_{CHANGELOG}"
      # commits de merges não são considerados
      # No caso de buscar uma mensagem de um commit específico, só serão considerados os 10 ultimos comits
      #  - Não sendo possível ser encontrado nenhum, será considerado o último
-9.4. Se falhar, ERRO;
+11.4. Se falhar, ERRO;
      Grava "Erro: Não foi possível fazer merge de {branch de merge} para {2.0.0rc}" >> "tmpname_v2.0.0.log"
 
-10. Escreve número de versão
+12. Escreve número de versão
     $ Grava "2.0.0" >> "versao.txt"
-11. Escreve CHANGELOG
+13. Escreve CHANGELOG
     $ Grava "2.0.0" > "tmpname_stage_{CHANGELOG}"
     $ Grava "=====" >> "tmpname_stage_{CHANGELOG}"
     $ Grava "[tmpname_{CHANGELOG}]" >> "tmpname_stage_{CHANGELOG}"
@@ -88,23 +94,23 @@ Commit com mensagem de log [ultimo]: sd45f4d4d54fs46df456d45df654fd465
     $ Grava "[ChangeLog.txt]" >> "tmpname_stage_{CHANGELOG}"
     $ Grava "[tmpname_stage_{CHANGELOG}]" > "[ChangeLog.txt]"
 
-12. Comita as alterações em "versao.txt" e "ChangeLog.txt"
+14. Comita as alterações em "versao.txt" e "ChangeLog.txt"
     $ git add --force "versao.txt"
     $ git add --force "ChangeLog.txt"
     $ git commit -m "Dados da versão [2.0.0] atualizados em 'versao.txt' e 'ChangeLog.txt'"
 
-13. Gerar TAG de versão
+15. Gerar TAG de versão
     $ git tag "v2.0.0"
 
-14. Merge em DEVELOP
+16. Merge em DEVELOP
     $ git checkout "develop"
     $ git merge "v2.0.0"
-14.1. Se falhar, ERRO;
+17.1. Se falhar, ERRO;
     Grava "Erro: Não foi possível fazer merge de {v2.0.0} para {develop}" >> "tmpname_v2.0.0.log"
 
-15. Exibir mensagem de sucesso, apresentar caminho do arquivo de LOG e caminho da pasta temporária do repositório
+18. Exibir mensagem de sucesso, apresentar caminho do arquivo de LOG e caminho da pasta temporária do repositório
 
-16. Deseja enviar versão para servidor remoto agora?
+19. Deseja enviar versão para servidor remoto agora?
     Se sim:
         $ git push -u {remoto} {master}:{master}
         $ git push -u {remoto} {develop}:{develop}
