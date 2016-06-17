@@ -70,8 +70,12 @@ param (
 )
 
 $_localeDefault = "en-US"
+$_localeUser = $host.CurrentCulture.Name
 $_localeFilePath = [io.path]::Combine($PSScriptRoot, "locale.${Locale}.ps1")
 
+if(!(Test-Path $_localeFilePath)) {
+    $_localeFilePath = [io.path]::Combine($PSScriptRoot, "locale.${_localeUser}.ps1")
+}
 if(!(Test-Path $_localeFilePath)) {
     $_localeFilePath = [io.path]::Combine($PSScriptRoot, "locale.${_localeDefault}.ps1")
 }
@@ -673,6 +677,14 @@ try {
 
         git show -s --format=%B <commit hash>
     #>
+
+    "================== CHANGE LOG MERGE ==================" | Write-Host -BackgroundColor DarkGreen -ForegroundColor White
+    Get-Content $_changelogMergePath | Write-Host -BackgroundColor DarkGreen -ForegroundColor White
+    
+    "" | Write-Host
+    
+    "================== CHANGE LOG STAGE ==================" | Write-Host -BackgroundColor Gray -ForegroundColor Black
+    Get-Content $_changelogStagePath | Write-Host -BackgroundColor Gray -ForegroundColor Black
 
     <#
     14. Comita as alterações em "versao.txt" e "ChangeLog.txt"
