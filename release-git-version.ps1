@@ -339,6 +339,30 @@ Function Git-RemoteRefExists([string]$Url, [string]$Path, [string]$RefName) {
 
 <#
 .SYNOPSIS
+    Get a last commit HASH from branch/tag
+.PARAMETER Url
+    Remote repository URL
+.PARAMETER Path
+    Local repository path 
+.PARAMETER RefName
+    Reference name 
+#>
+Function Git-GetLastCommit([string]$Url, [string]$Path, [string]$RefName) {
+    # git ls-remote --exit-code ${Url} ${RefName}
+    $result = ((start -FilePath "git" -ArgumentList @("ls-remote", "--exit-code", "${Url}" ,"${RefName}") -WorkingDirectory "${Path}" -RedirectStandardOutput "${_execStdOutPath}" -RedirectStandardError "${_execStdErrPath}" -NoNewWindow -PassThru -Wait).ExitCode -eq 0)
+
+    if($result){
+        foreach($line in (Get-Content "${_execStdOutPath}")){
+            $line -match '^(.+)\s+(.+)$' | Out-Null
+            if(![string]::IsNullOrWhiteSpace($Matches[1])){
+                return $Matches[1]
+            }
+        }
+    }
+}
+
+<#
+.SYNOPSIS
     Set repository Git config
 .PARAMETER Path
     Local repository path 
@@ -514,6 +538,7 @@ try {
 
     # Check work merge list
     Write-Log -Message $env:LOG_CHECK_MERGE_LIST
+    $_mergeListString = @()
     foreach ($m in $_mergeList){
         if($m.Work -eq $BranchProduction){
             throw $env:MSG_ERROR_BRANCH_EQUAL_PRODUCTION.Replace("{0}", $m.Work)
@@ -527,8 +552,9 @@ try {
         if(Test-Duplicate -List $_mergeList -Item $m){
             throw $env:MSG_ERROR_BRANCH_DUPLICATED.Replace("{0}", $m.Work)
         }
+        $_mergeListString += $m.Work
     }
-    Write-Log -Message $env:LOG_CHECK_MERGE_LIST_OK
+    Write-Log -Message $env:LOG_CHECK_MERGE_LIST_OK.Replace("{0}", [string]:: $_mergeListString)
 
     # Cloning repository
     $env:LOG_REPOSITORY_CLONE.Replace("{0}", "${RepositoryURL}") | Write-Host
@@ -568,6 +594,9 @@ try {
         if(!(Git-RemoteRefExists -Url $RepositoryURL -Path $_repositoryFolder -RefName "${mergeName}")){
             throw $env:MSG_ERROR_WORK_BRANCH_NOT_EXISTS.Replace("{0}", "${mergeName}")
         }
+        if(!$m.Log){
+            $m.Log = Git-GetLastCommit -Url $RepositoryURL -Path $_repositoryFolder -RefName "${mergeName}" 
+        }
     }
     Write-Log -Message $env:LOG_CHECK_BRANCHES_OK
 
@@ -601,31 +630,21 @@ try {
         throw $env:MSG_ERROR_CREATE_RELEASE_BRANCH.Replace("{0}", $BranchVersion)
     }
 
-    <#
-    11. Para cada branch de merge:
-    11.1. Grava "Merge de {remoto}/{branch de merge}\n--------" >> "tmpname_v2.0.0.log"
-    11.2. Faz merge no branch de versão:
-        $ git merge "{remoto}/{branch de merge}" >> "tmpname_v2.0.0.log"
-    11.3. Grava LOG de "$git log -1 --no-merges --pretty=oneline|foreach($git log -10 --no-merges --pretty=oneline)" >> "tmpname_{CHANGELOG}"
-        # commits de merges não são considerados
-        # No caso de buscar uma mensagem de um commit específico, só serão considerados os 10 ultimos comits
-        #  - Não sendo possível ser encontrado nenhum, será considerado o último
-    11.4. Se falhar, ERRO;
-        Grava "Erro: Não foi possível fazer merge de {branch de merge} para {2.0.0rc}" >> "tmpname_v2.0.0.log"
-    #>
+    # Integrating branches
     $env:LOG_INTEGRATING_BRANCHES_VERSION | Write-Host
     Write-Log -Message $env:LOG_INTEGRATING_BRANCHES_VERSION -NoVerbose
     foreach ($m in $_mergeList){
-        $m | Write-Host
         $mergeName = $m.Work
         if(!(Git-Merge -Url $RepositoryURL  -Path $_repositoryFolder -RefName "${mergeName}")){
             Write-Log -Message $env:MSG_ERROR_FAILED_INTEGRATE_BRANCH.Replace("{0}", $m.Work).Replace("{1}", $BranchVersion) -NoVerbose
 
+            # TODO: Move string to locale file
             Write-Log -Message "------------------MERGE SUMMARY--------------------" -OnlyMessage -NoVerbose
             Get-Content $_execStdOutPath | foreach{
                 Write-Log -Message $_ -OnlyMessage -NoVerbose
             }
             Write-Log -Message "" -OnlyMessage -NoVerbose
+            # TODO: Move string to locale file
             Write-Log -Message "------------------MERGE DIFF-----------------------" -OnlyMessage -NoVerbose
             Get-Content $_execStdErrPath | foreach{
                 Write-Log -Message $_ -OnlyMessage -NoVerbose
@@ -634,10 +653,14 @@ try {
         }
     }
 
-    <#
-    12. Escreve número de versão
-        $ Grava "2.0.0" >> "versao.txt"
-    #>
+    # Writing version file
+    $env:LOG_WRITING_VERSION_FILE | Write-Host
+    Write-Log -Message $env:LOG_WRITING_VERSION_FILE -NoVerbose
+    if($FileVersion){
+        $_fileVersionPath = [io.path]::Combine($_repositoryFolder, $FileVersion)
+        New-Item -ItemType File -Force $_fileVersionPath > $null
+        "${Version}" > $_fileVersionPath
+    }
 
     <#
     13. Escreve CHANGELOG
@@ -647,6 +670,8 @@ try {
         $ Grava "" >> "tmpname_stage_{CHANGELOG}"
         $ Grava "[ChangeLog.txt]" >> "tmpname_stage_{CHANGELOG}"
         $ Grava "[tmpname_stage_{CHANGELOG}]" > "[ChangeLog.txt]"
+
+        git show -s --format=%B <commit hash>
     #>
 
     <#
@@ -655,6 +680,24 @@ try {
         $ git add --force "ChangeLog.txt"
         $ git commit -m "Dados da versão [2.0.0] atualizados em 'versao.txt' e 'ChangeLog.txt'"
     #>
+
+
+    # Actions:::::::::::::::::::::::::::::::::::::::::::::::::::::
+    # ============================================================
+    #   - PublishProduction
+    #       > Merge Version on Master
+    #       > Generate TAG from Master
+    #       > Merge TAG on Develop
+    #       > Push Master
+    #       > Push Develop
+    #       > Push TAG
+    #
+    #   - PublishVersion
+    #       > Push Version branch
+    #
+    #   - CopyRepository
+    #       > Copy repository folder to -OutputRepositoryPath
+    # ============================================================
 
     <#
     15. Merge em MASTER
