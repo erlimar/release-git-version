@@ -367,6 +367,25 @@ Function Git-GetLastCommit([string]$Url, [string]$Path, [string]$RefName) {
 
 <#
 .SYNOPSIS
+    Get a commit log text
+.PARAMETER Path
+    Local repository path 
+.PARAMETER Hash
+    Commit hash 
+#>
+Function Git-GetLogText([string]$Path, [string]$Hash) {
+    # git show -s --format=%B ${Hash}
+    $result = ((start -FilePath "git" -ArgumentList @("show", "-s", "--format=%B" ,"${Hash}") -WorkingDirectory "${Path}" -RedirectStandardOutput "${_execStdOutPath}" -RedirectStandardError "${_execStdErrPath}" -NoNewWindow -PassThru -Wait).ExitCode -eq 0)
+
+    if(!$result){
+        throw $env:MSG_ERROR_LOG_COMMIT_NOT_FOUND.Replace("{0}", $Hash)
+    }
+
+    return (Get-Content "${_execStdOutPath}")
+}
+
+<#
+.SYNOPSIS
     Set repository Git config
 .PARAMETER Path
     Local repository path 
@@ -677,6 +696,14 @@ try {
 
         git show -s --format=%B <commit hash>
     #>
+    foreach ($m in $_mergeList){
+        $mergeName = $m.Work
+        $mergeLog = $m.Log
+        "***( $mergeName, $mergeLog )***" | Write-Host -BackgroundColor Yellow -ForegroundColor Black
+        "------------------"| Write-Host -BackgroundColor Yellow -ForegroundColor Black
+        Git-GetLogText -Path $_repositoryFolder -Hash $m.Log | Write-Host -BackgroundColor Yellow -ForegroundColor Black
+        "" | Write-Host
+    }
 
     "================== CHANGE LOG MERGE ==================" | Write-Host -BackgroundColor DarkGreen -ForegroundColor White
     Get-Content $_changelogMergePath | Write-Host -BackgroundColor DarkGreen -ForegroundColor White

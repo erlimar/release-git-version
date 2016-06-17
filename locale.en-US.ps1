@@ -10,6 +10,7 @@ $env:MSG_ERROR_BRANCH_EQUAL_PRODUCTION  = "Work branch [{0}] is equal to product
 $env:MSG_ERROR_BRANCH_EQUAL_DEVELOPMENT = "Work branch [{0}] is equal to development branch."
 $env:MSG_ERROR_BRANCH_EQUAL_VERSION     = "Work branch [{0}] is equal to version branch."
 $env:MSG_ERROR_BRANCH_DUPLICATED        = "Work branch [{0}] is duplicated."
+$env:MSG_ERROR_LOG_COMMIT_NOT_FOUND     = "Commit [{0}] was not found to extract the log message."
 
 $env:MSG_ERROR_REPOSITORY_CLONE         = "It was possible to clone the repository [{0}]."
 $env:MSG_ERROR_VERSIONBRANCH_EXISTS     = "Version branch [{0}] already exists."
