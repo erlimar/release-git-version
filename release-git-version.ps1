@@ -381,7 +381,33 @@ Function Git-GetLogText([string]$Path, [string]$Hash) {
         throw $env:MSG_ERROR_LOG_COMMIT_NOT_FOUND.Replace("{0}", $Hash)
     }
 
-    return (Get-Content "${_execStdOutPath}")
+    return [text.encoding]::UTF8.GetString([text.encoding]::Default.GetBytes((Get-Content "${_execStdOutPath}")))
+}
+
+<#
+.SYNOPSIS
+    Git add a file
+.PARAMETER Path
+    Local repository path 
+.PARAMETER RefName
+    Reference name 
+#>
+Function Git-Add([string]$Path, [string]$RefName) {
+    # git add --force "versao.txt"
+    return ((start -FilePath "git" -ArgumentList @("add", "--force", "${RefName}") -WorkingDirectory "${Path}" -RedirectStandardOutput "${_execStdOutPath}" -RedirectStandardError "${_execStdErrPath}" -NoNewWindow -PassThru -Wait).ExitCode -eq 0)
+}
+
+<#
+.SYNOPSIS
+    Git commit
+.PARAMETER Path
+    Local repository path 
+.PARAMETER Message
+    Commit message text  
+#>
+Function Git-Commit([string]$Path, [string]$Message) {
+    # git commit --message="${Message}"
+    return ((start -FilePath "git" -ArgumentList @("commit", "--message=`"${Message}`"") -WorkingDirectory "${Path}" -RedirectStandardOutput "${_execStdOutPath}" -RedirectStandardError "${_execStdErrPath}" -NoNewWindow -PassThru -Wait).ExitCode -eq 0)
 }
 
 <#
@@ -495,6 +521,8 @@ try {
     $_changelogStagePath = [io.path]::Combine($_tempFolder, $_changelogStage)
 
     $_mergeList = @()
+
+    $FileChangelogPath = [io.path]::Combine($_repositoryFolder, $FileChangelog)
     
     # Create temporary file structure
     if(Test-Path $_tempFolder){
@@ -643,7 +671,7 @@ try {
     
     if(!(Git-Checkout -Path $_repositoryFolder -RefName $BranchDevelopment)){
         throw $env:MSG_ERROR_CHECKOUT_DEVELOPMENT.Replace("{0}", $BranchDevelopment)
-    } 
+    }
 
     # Creating version branch
     $env:LOG_CREATING_VERSION_BRANCH.Replace("{0}", "${BranchVersion}") | Write-Host
@@ -685,41 +713,42 @@ try {
         "${Version}" > $_fileVersionPath
     }
 
-    <#
-    13. Escreve CHANGELOG
-        $ Grava "2.0.0" > "tmpname_stage_{CHANGELOG}"
-        $ Grava "=====" >> "tmpname_stage_{CHANGELOG}"
-        $ Grava "[tmpname_{CHANGELOG}]" >> "tmpname_stage_{CHANGELOG}"
-        $ Grava "" >> "tmpname_stage_{CHANGELOG}"
-        $ Grava "[ChangeLog.txt]" >> "tmpname_stage_{CHANGELOG}"
-        $ Grava "[tmpname_stage_{CHANGELOG}]" > "[ChangeLog.txt]"
-
-        git show -s --format=%B <commit hash>
-    #>
+    # Writing CHANGELOG
+    # TODO: Move string to locale file 
+    $versionTitle = "Release ${Version}"
+    "${versionTitle}" >> $_changelogMergePath
+    ("=" * $versionTitle.Length) >> $_changelogMergePath
     foreach ($m in $_mergeList){
-        $mergeName = $m.Work
-        $mergeLog = $m.Log
-        "***( $mergeName, $mergeLog )***" | Write-Host -BackgroundColor Yellow -ForegroundColor Black
-        "------------------"| Write-Host -BackgroundColor Yellow -ForegroundColor Black
-        Git-GetLogText -Path $_repositoryFolder -Hash $m.Log | Write-Host -BackgroundColor Yellow -ForegroundColor Black
-        "" | Write-Host
+        $logText = Git-GetLogText -Path $_repositoryFolder -Hash $m.Log
+        "  - ${logText}" >> $_changelogMergePath
+    }
+    
+    Get-Content $_changelogMergePath | Set-Content $_changelogStagePath
+
+    if(Test-Path $FileChangelogPath){
+        "" >> $_changelogStagePath
+        Get-Content $FileChangelogPath >> $_changelogStagePath 
     }
 
-    "================== CHANGE LOG MERGE ==================" | Write-Host -BackgroundColor DarkGreen -ForegroundColor White
-    Get-Content $_changelogMergePath | Write-Host -BackgroundColor DarkGreen -ForegroundColor White
-    
-    "" | Write-Host
-    
-    "================== CHANGE LOG STAGE ==================" | Write-Host -BackgroundColor Gray -ForegroundColor Black
-    Get-Content $_changelogStagePath | Write-Host -BackgroundColor Gray -ForegroundColor Black
+    Get-Content $_changelogStagePath | Set-Content $FileChangelogPath
 
-    <#
-    14. Comita as alterações em "versao.txt" e "ChangeLog.txt"
-        $ git add --force "versao.txt"
-        $ git add --force "ChangeLog.txt"
-        $ git commit -m "Dados da versão [2.0.0] atualizados em 'versao.txt' e 'ChangeLog.txt'"
-    #>
+    # Add changelog and version file commit
+    if($FileVersion){
+        if(!(Git-Add -Path $_repositoryFolder -RefName $FileVersion)){
+            # TODO: Move string to locale file
+            throw "Error on add ${FileVersion} file."
+        }
+    }
+    if(!(Git-Add -Path $_repositoryFolder -RefName $FileChangelog)){
+        # TODO: Move string to locale file
+        throw "Error on add ${FileChangelog} file."
+    }
 
+    # TODO: Move string to locale file
+    if(!(Git-Commit -Path $_repositoryFolder -Message "Dados da versão ${Version} atualizados em arquivos de informação")){
+        # TODO: Move string to locale file
+        throw "Error on commit changelog/version file."
+    }
 
     # Actions:::::::::::::::::::::::::::::::::::::::::::::::::::::
     # ============================================================
@@ -787,7 +816,7 @@ catch {
     $LastExitCode = 1
 }
 finally {
-    Clear-TempData -FullClear (!$_success)
+    #Clear-TempData -FullClear (!$_success)
 }
 
 exit($LastExitCode)
